@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}History{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Detection History</h4>
+            </div>
+            <div class="card-body">
+                {% if results %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Image</th>
+                                    <th>Disease</th>
+                                    <th>Confidence</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in results %}
+                                <tr class="history-item">
+                                    <td>
+                                        <img src="{{ url_for('static', filename=result.image_path.replace('static/', '')) }}" 
+                                             class="history-image" alt="Plant Image">
+                                    </td>
+                                    <td>{{ result.prediction.replace('_', ' ') }}</td>
+                                    <td>
+                                        <span class="badge {% if result.confidence > 0.8 %}bg-success{% elif result.confidence > 0.6 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                            {{ (result.confidence * 100) | round(2) }}%
+                                        </span>
+                                    </td>
+                                    <td>{{ result.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('chat', disease_id=result.id) }}" 
+                                           class="btn btn-sm btn-success" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Get treatment recommendations">
+                                            <i class="fas fa-comment-medical"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-history fa-3x mb-3 text-muted"></i>
+                        <h5>No History Found</h5>
+                        <p class="text-muted">Your detection history will appear here.</p>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary mt-3">
+                            <i class="fas fa-upload me-2"></i>Upload an Image
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

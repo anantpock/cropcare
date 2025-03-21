@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <style>
+    .leaf {
+      fill: none;
+      stroke: #4CAF50;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .veins {
+      fill: none;
+      stroke: #4CAF50;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+  <path class="leaf" d="M50,10 C30,10 10,30 10,50 C10,70 30,90 50,90 C70,90 80,70 80,50 L80,30 C80,15 65,10 50,10 Z" />
+  <path class="veins" d="M50,10 L50,90" />
+  <path class="veins" d="M50,30 L30,40" />
+  <path class="veins" d="M50,30 L70,40" />
+  <path class="veins" d="M50,50 L25,55" />
+  <path class="veins" d="M50,50 L75,55" />
+  <path class="veins" d="M50,70 L30,75" />
+  <path class="veins" d="M50,70 L70,75" />
+</svg>

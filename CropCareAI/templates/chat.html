@@ -1,0 +1,422 @@
+{% extends 'base.html' %}
+
+{% block title %}Treatment Recommendations{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        {% if disease_result %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Plant Disease Details</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <img src="{{ url_for('static', filename=disease_result.image_path.replace('static/', '')) }}" 
+                                 class="img-fluid rounded" style="max-height: 200px;" alt="Plant Image">
+                        </div>
+                        <div class="col-md-8">
+                            <h5 id="disease-name">{{ disease_result.prediction }}</h5>
+                            <p><strong>Confidence:</strong> 
+                                <span class="badge {% if disease_result.confidence > 0.8 %}bg-success{% elif disease_result.confidence > 0.6 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                    {{ (disease_result.confidence * 100) | round(2) }}%
+                                </span>
+                            </p>
+                            <p><strong>Detected:</strong> {{ disease_result.timestamp.strftime('%Y-%m-%d %H:%M') }}</p>
+                            <p>Ask our AI assistant for treatment recommendations and prevention tips.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0">Treatment Recommendations</h4>
+                </div>
+                <div class="card-body">
+                    <div id="chat-container" class="chat-container">
+                        <div class="chat-message bot-message welcome-message">
+                            Hello! I can provide treatment recommendations for plants affected by {{ disease_result.prediction.replace('_', ' ') }}. What would you like to know?
+                        </div>
+                    </div>
+                    
+                    <div id="chat-loader" class="loader d-none">
+                        <div class="typing">
+                            <span class="typing-dot"></span>
+                            <span class="typing-dot"></span>
+                            <span class="typing-dot"></span>
+                        </div>
+                    </div>
+                    
+                    <form id="chat-form">
+                        <div class="input-group">
+                            <input type="text" id="user-input" class="form-control" placeholder="Ask about treatments, symptoms, or prevention..." required>
+                            <button type="submit" id="send-button" class="btn btn-success pulse-button">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div class="mt-3">
+                        <p class="text-muted small">Suggested questions:</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-sm btn-outline-secondary suggested-question">What are the symptoms?</button>
+                            <button class="btn btn-sm btn-outline-secondary suggested-question">How do I treat it?</button>
+                            <button class="btn btn-sm btn-outline-secondary suggested-question">How to prevent it?</button>
+                            <button class="btn btn-sm btn-outline-secondary suggested-question">Is it contagious?</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="card shadow-sm">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-exclamation-circle fa-3x mb-3 text-warning"></i>
+                    <h4>No Disease Selected</h4>
+                    <p class="text-muted">Please select a disease from your history or detect a new plant disease.</p>
+                    <div class="mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-primary me-2">
+                            <i class="fas fa-upload me-2"></i>Detect New Disease
+                        </a>
+                        <a href="{{ url_for('history') }}" class="btn btn-secondary">
+                            <i class="fas fa-history me-2"></i>View History
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Get or generate a session ID for this chat
+    let sessionId = localStorage.getItem('chat_session_id');
+    if (!sessionId) {
+        sessionId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('chat_session_id', sessionId);
+    }
+    
+    // Store disease information if available
+    {% if disease_result %}
+    const diseaseName = "{{ disease_result.prediction.replace('_', ' ') }}";
+    {% else %}
+    const diseaseName = null;
+    {% endif %}
+    
+    // Handle the chat form submission
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatForm = document.getElementById('chat-form');
+        
+        // Only proceed if we're on the chat page with a form
+        if (!chatForm) return;
+        
+        const userInput = document.getElementById('user-input');
+        const chatContainer = document.getElementById('chat-container');
+        const chatLoader = document.getElementById('chat-loader');
+        const suggestedQuestions = document.querySelectorAll('.suggested-question');
+        
+        // Function to add a message to the chat
+        function addMessageToChat(sender, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message');
+            messageDiv.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
+            
+            // Convert Markdown to HTML for bot messages
+            if (sender === 'bot') {
+                // Simple markdown to HTML conversion for common elements
+                let html = content
+                    // Convert headers
+                    .replace(/^# (.*$)/gm, '<h3>$1</h3>')
+                    .replace(/^## (.*$)/gm, '<h4>$1</h4>')
+                    .replace(/^### (.*$)/gm, '<h5>$1</h5>')
+                    // Convert bold
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    // Convert italic
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    // Convert unordered lists
+                    .replace(/^\s*- (.*$)/gm, '<li>$1</li>')
+                    // Convert ordered lists (numbers)
+                    .replace(/^\s*\d+\. (.*$)/gm, '<li>$1</li>')
+                    // Wrap lists in ul/ol tags
+                    .replace(/<li>(.*?)<\/li>/g, function(match) {
+                        return '<ul>' + match + '</ul>';
+                    })
+                    // Convert newlines to br tags
+                    .replace(/\n/g, '<br>');
+                
+                messageDiv.innerHTML = html;
+            } else {
+                messageDiv.textContent = content;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            
+            // Scroll to the bottom of the chat
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Function to send a message to the server
+        async function sendMessage(message) {
+            try {
+                chatLoader.classList.remove('d-none');
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        session_id: sessionId
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                chatLoader.classList.add('d-none');
+                
+                if (data.error) {
+                    console.error('Error:', data.error);
+                    addMessageToChat('bot', 'Sorry, I encountered an error. Please try again.');
+                } else {
+                    addMessageToChat('bot', data.response);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                chatLoader.classList.add('d-none');
+                addMessageToChat('bot', 'Sorry, I encountered an error. Please try again.');
+            }
+        }
+        
+        // Handle form submission
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessageToChat('user', message);
+            
+            // Clear input
+            userInput.value = '';
+            
+            // Send message to server
+            await sendMessage(message);
+        });
+        
+        // Handle suggested questions
+        suggestedQuestions.forEach(button => {
+            button.addEventListener('click', function() {
+                userInput.value = this.textContent;
+                // Focus on the input
+                userInput.focus();
+            });
+        });
+        
+        // Initialize chat with disease context if available
+        if (diseaseName) {
+            setTimeout(async () => {
+                await sendMessage(`I want to learn about treating ${diseaseName}. Can you help me?`);
+            }, 1000);
+        }
+    });
+</script>
+
+<style>
+    .chat-container {
+        height: 350px;
+        overflow-y: auto;
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #2c3035;
+        border-radius: 0.25rem;
+        background-color: #212529;
+        color: #e9ecef;
+    }
+    
+    .chat-message {
+        margin-bottom: 15px;
+        padding: 10px 15px;
+        border-radius: 1rem;
+        max-width: 80%;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeInUp 0.3s ease forwards;
+    }
+    
+    .user-message {
+        background-color: #375a7f;
+        margin-left: auto;
+        border-top-right-radius: 0;
+        color: #ffffff;
+    }
+    
+    .bot-message {
+        background-color: #3a3f44;
+        margin-right: auto;
+        border-top-left-radius: 0;
+        color: #e9ecef;
+    }
+    
+    /* Special animation for the welcome message */
+    .welcome-message {
+        animation: fadeInWelcome 1s ease forwards !important;
+        background-color: #3a3f44;
+        background-image: linear-gradient(135deg, #3a3f44 0%, #4b5359 100%);
+        border-left: 4px solid #5eb5e0;
+    }
+    
+    @keyframes fadeInWelcome {
+        0% { 
+            opacity: 0;
+            transform: translateY(30px) scale(0.9);
+        }
+        70% {
+            opacity: 0.7;
+            transform: translateY(-5px) scale(1.02);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+    
+    .loader {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    .typing {
+        display: inline-flex;
+        align-items: center;
+        background-color: #3a3f44;
+        border-radius: 18px;
+        padding: 10px 15px;
+        max-width: 80%;
+        margin-right: auto;
+        border-top-left-radius: 0;
+    }
+    
+    .typing-dot {
+        width: 8px;
+        height: 8px;
+        margin: 0 2px;
+        background-color: #e9ecef;
+        border-radius: 50%;
+        opacity: 0.6;
+        animation: typing 1.4s infinite ease-in-out;
+    }
+    
+    .typing-dot:nth-child(1) { animation-delay: 0s; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.4); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    #user-input {
+        background-color: #343a40;
+        color: #e9ecef;
+        border-color: #444;
+    }
+    
+    #user-input::placeholder {
+        color: #868e96;
+    }
+    
+    .card {
+        background-color: #2c3035;
+        color: #e9ecef;
+    }
+    
+    .card-header {
+        background-color: #343a40;
+        border-color: #444;
+    }
+    
+    /* Pulse animation for the send button */
+    .pulse-button {
+        position: relative;
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        }
+        
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+        }
+        
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+        }
+    }
+    
+    /* Shimmer effect for suggested questions */
+    .suggested-question {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .suggested-question:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .suggested-question::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.1) 50%,
+            rgba(255, 255, 255, 0) 100%
+        );
+        transform: rotate(30deg);
+        animation: shimmer 4s infinite;
+        pointer-events: none;
+    }
+    
+    @keyframes shimmer {
+        0% { transform: translateX(-100%) rotate(30deg); }
+        100% { transform: translateX(100%) rotate(30deg); }
+    }
+</style>
+{% endblock %}
